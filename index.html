@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assinador Automático de PDF</title>
+  <!-- Biblioteca para manipulação de PDF no cliente -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { background: #ffffff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 480px; }
+    
+    /* Estilos do Cabeçalho e Logo */
+    .header { text-align: center; margin-bottom: 30px; }
+    .header-logo { max-width: 250px; height: auto; display: block; margin: 0 auto 10px auto; }
+    h2 { margin: 0; color: #333; text-align: center; }
+
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+    input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    button { width: 100%; background-color: #007bff; color: white; border: none; padding: 12px; font-size: 16px; border-radius: 4px; cursor: pointer; transition: background 0.3s; }
+    button:hover { background-color: #0056b3; }
+    button:disabled { background-color: #cccccc; cursor: not-allowed; }
+    #status { margin-top: 15px; text-align: center; font-weight: bold; color: #28a745; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <!-- Substitua "logo.png" pelo caminho ou URL da imagem fornecida -->
+      <img src="logo.png" alt="Logo" class="header-logo">
+      <h2>Assinador de Laudos</h2>
+    </div>
+    
+    <div class="form-group">
+      <label for="pdfInput">1. Selecione o PDF Documento:</label>
+      <input type="file" id="pdfInput" accept="application/pdf">
+    </div>
+
+    <div class="form-group">
+      <label for="signatureInput">2. Selecione a Assinatura (PNG/JPG):</label>
+      <input type="file" id="signatureInput" accept="image/png, image/jpeg">
+    </div>
+
+    <button id="processBtn" onclick="processPDF()">Assinar e Baixar PDF</button>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    async function processPDF() {
+      const pdfInput = document.getElementById('pdfInput').files[0];
+      const signatureInput = document.getElementById('signatureInput').files[0];
+      const statusDiv = document.getElementById('status');
+      const btn = document.getElementById('processBtn');
+
+      if (!pdfInput || !signatureInput) {
+        alert('Por favor, selecione tanto o arquivo PDF quanto a imagem da assinatura.');
+        return;
+      }
+
+      try {
+        btn.disabled = true;
+        statusDiv.innerText = "Processando arquivo...";
+
+        // 1. Ler os arquivos selecionados como ArrayBuffer
+        const pdfBytes = await pdfInput.arrayBuffer();
+        const signatureBytes = await signatureInput.arrayBuffer();
+
+        // 2. Carregar o documento PDF com pdf-lib
+        const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+
+        // 3. Processar a imagem conforme o formato (PNG ou JPEG)
+        let signatureImage;
+        if (signatureInput.type === 'image/png') {
+          signatureImage = await pdfDoc.embedPng(signatureBytes);
+        } else if (signatureInput.type === 'image/jpeg' || signatureInput.type === 'image/jpg') {
+          signatureImage = await pdfDoc.embedJpg(signatureBytes);
+        } else {
+          throw new Error('Formato de imagem não suportado. Use PNG ou JPG.');
+        }
+
+        // 4. Obter a última página do PDF (ou altere o índice para a página desejada)
+        const pages = pdfDoc.getPages();
+        const targetPage = pages[pages.length - 1]; // Pega a última página
+
+        // 5. Ajustar dimensões da assinatura mantendo a proporção
+        const sigDims = signatureImage.scale(0.3); // Reduz a imagem para 30% do tamanho original
+
+        // 6. Desenhar a assinatura na página
+        // x: Posição horizontal a partir da esquerda (em pontos)
+        // y: Posição vertical a partir do rodapé (em pontos)
+        targetPage.drawImage(signatureImage, {
+          x: 360,
+          y: 120,
+          width: sigDims.width,
+          height: sigDims.height,
+        });
+
+        // 7. Salvar e gerar o download do novo PDF
+        const modifiedPdfBytes = await pdfDoc.save();
+        const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `assinado_${pdfInput.name}`;
+        link.click();
+
+        statusDiv.innerText = "PDF assinado com sucesso!";
+      } catch (error) {
+        console.error(error);
+        statusDiv.innerText = "Erro ao processar o PDF.";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>
